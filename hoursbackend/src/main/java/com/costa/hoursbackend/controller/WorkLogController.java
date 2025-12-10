@@ -1,11 +1,12 @@
 package com.costa.hoursbackend.controller;
 
+import com.costa.hoursbackend.dto.WorkLogDTO;
 import com.costa.hoursbackend.model.WorkLog;
-import com.costa.hoursbackend.repository.WorkLogRepository;
+import com.costa.hoursbackend.service.WorkLogService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -14,19 +15,17 @@ import java.util.List;
 public class WorkLogController {
 
     @Autowired
-    private WorkLogRepository repository;
+    private WorkLogService service;
 
     @PostMapping
-    public WorkLog add(@RequestBody WorkLog log){
-        return repository.save(log);
+    public ResponseEntity<WorkLog> add(@RequestBody WorkLog log){
+        return ResponseEntity.ok(service.addWorkLog(log));
     }
 
     @GetMapping
-    public List<WorkLog> getMonthly(@RequestParam int year, @RequestParam int month){
-        LocalDate start = LocalDate.of(year, month, 1);
-        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-
-        return repository.findByDateBetween(start, end);
+    public ResponseEntity<List<WorkLogDTO>> getMonthly(
+            @RequestParam int year,
+            @RequestParam int month){
+        return ResponseEntity.ok(service.getWorkLogsByMonthYear(year, month));
     }
-
 }
