@@ -2,27 +2,29 @@ import { useState } from "react";
 import api from "./api/api";
 
 export default function AddLog({ onAdded }) {
-  // Local state for each input field
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [notes, setNotes] = useState("");
-
-  // State for showing success or error messages
-  const [message, setMessage] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
 
-    // Calculate total hours between start and end times
+    if (start >= end) {
+      setError("Start time must be before end time");
+      setSuccess("");
+      return;
+    }
+
     const total =
-      (new Date(`1970-01-01T${end}:00`) -
-        new Date(`1970-01-01T${start}:00`)) /
+      (new Date(`1970-01-01T${end}:00`) - new Date(`1970-01-01T${start}:00`)) /
       3600000;
 
     try {
-      // Send POST request to backend to save the work log
+      setLoading(true);
       await api.post("/worklogs", {
         date,
         startTime: start,
@@ -31,61 +33,94 @@ export default function AddLog({ onAdded }) {
         notes,
       });
 
-      // Clear the form inputs after submission
       setDate("");
       setStart("");
       setEnd("");
       setNotes("");
-
-      // Clear any previous error and show success message
-      setError(null);
-      setMessage("Work log added successfully!");
-
-      // Call parent function to reload the list
+      setError("");
+      setSuccess("Log added successfully!");
       onAdded();
-
-      // Automatically hide success message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
     } catch (err) {
-      // Show error message if request fails
-      setError("Error adding work log. Please try again.");
-      console.error("Error adding work log:", err);
+      console.error(err);
+      setError("Failed to add log.");
+      setSuccess("");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ marginBottom: "1rem" }}>
-      {/* Feedback messages */}
-      {message && <p style={{ color: "green" }}>{message}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      <form onSubmit={submit}>
+    <form
+      onSubmit={submit}
+      style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}
+    >
+      <label>
+        Date:
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           required
+          style={{ width: "100%", padding: "0.4rem", borderRadius: "4px", border: "1px solid #ccc" }}
         />
-        <input
-          type="time"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          required
-        />
-        <input
-          type="time"
-          value={end}
-          onChange={(e) => setEnd(e.target.value)}
-          required
-        />
+      </label>
+
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <label style={{ flex: 1 }}>
+          Start Time:
+          <input
+            type="time"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            required
+            style={{ width: "100%", padding: "0.4rem", borderRadius: "4px", border: "1px solid #ccc" }}
+          />
+        </label>
+        <label style={{ flex: 1 }}>
+          End Time:
+          <input
+            type="time"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            required
+            style={{ width: "100%", padding: "0.4rem", borderRadius: "4px", border: "1px solid #ccc" }}
+          />
+        </label>
+      </div>
+
+      <label>
+        Notes:
         <input
           type="text"
-          placeholder="Notes"
+          placeholder="Optional notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          style={{ width: "100%", padding: "0.4rem", borderRadius: "4px", border: "1px solid #ccc" }}
         />
-        <button type="submit">Add</button>
-      </form>
-    </div>
+      </label>
+
+      {/* Error message */}
+      {error && <p style={{ color: "red", margin: 0 }}>{error}</p>}
+
+      {/* Success message */}
+      {success && <p style={{ color: "green", margin: 0 }}>{success}</p>}
+
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          padding: "0.6rem",
+          borderRadius: "6px",
+          border: "none",
+          backgroundColor: "#007bff",
+          color: "#fff",
+          cursor: loading ? "not-allowed" : "pointer",
+          fontWeight: "bold",
+          marginTop: "0.5rem",
+        }}
+      >
+        {loading ? "Adding..." : "Add Log"}
+      </button>
+    </form>
   );
 }

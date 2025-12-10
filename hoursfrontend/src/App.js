@@ -2,31 +2,54 @@ import { useEffect, useState } from 'react';
 import api from './api/api';
 import AddLog from './AddLog';
 
-// Helper function to get start and end date of the ISO week
-function getWeekStartEnd(dateString) {
-  const date = new Date(dateString);
-  const day = date.getDay() || 7; // Sunday = 7
-  const start = new Date(date);
-  start.setDate(date.getDate() - day + 1); // Monday
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6); // Sunday
+function formatHours(h) {
+  return Number(h).toFixed(1);
+}
 
-  // Format as YYYY-MM-DD
-  const format = (d) => d.toISOString().split('T')[0];
+// Groups logs into weekly totals (Monday → Sunday) strictly inside the selected month
+function groupLogsByWeek(logs, year, month) {
+    const result = {};
 
-  return { start: format(start), end: format(end) };
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month, 0);
+
+    logs.forEach(log => {
+        const logDate = new Date(log.date);
+        const day = logDate.getDay(); // 0 = Sunday, 1 = Monday...
+
+        // Find Monday
+        const monday = new Date(logDate);
+        monday.setDate(logDate.getDate() - ((day + 6) % 7));
+
+        // Sunday
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+
+        // Clamp to month boundaries
+        const weekStart = new Date(Math.max(monday, monthStart));
+        const weekEnd = new Date(Math.min(sunday, monthEnd));
+
+        const key = `${weekStart.toISOString().slice(0,10)} → ${weekEnd.toISOString().slice(0,10)}`;
+
+        if (!result[key]) {
+            result[key] = 0;
+        }
+
+        result[key] += log.totalHours;
+    });
+
+    return result;
 }
 
 function App() {
-  // State
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
+
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState(currentMonth);
 
-  // Dropdown options
   const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
   const months = [
     { value: 1, label: "January" },
@@ -43,16 +66,17 @@ function App() {
     { value: 12, label: "December" },
   ];
 
-  // Load data
+  // Load logs
   const loadData = () => {
     api
       .get("/worklogs", { params: { year, month } })
       .then((res) => {
-        setLogs(res.data);
-        setError(null);
+          setLogs(res.data);
+          setWeeklyTotals(groupLogsByWeek(res.data, year, month));
+          setError(null);
       })
       .catch((err) => {
-        console.error("Error fetching logs:", err);
+        console.error(err);
         setError("Failed to load work logs.");
       });
   };
@@ -61,14 +85,11 @@ function App() {
     loadData();
   }, [year, month]);
 
-  // Totals
+  // Calculate monthly total
   const totalHours = logs.reduce((sum, log) => sum + log.totalHours, 0);
-  const weeklyTotals = logs.reduce((acc, log) => {
-    const { start, end } = getWeekStartEnd(log.date);
-    const key = `${start} → ${end}`;
-    acc[key] = (acc[key] || 0) + log.totalHours;
-    return acc;
-  }, {});
+
+  const [weeklyTotals, setWeeklyTotals] = useState({});
+
 
   return (
     <div style={{ padding: "2rem", fontFamily: "Arial, sans-serif", maxWidth: "700px", margin: "0 auto" }}>
@@ -84,7 +105,6 @@ function App() {
             ))}
           </select>
         </label>
-
         <label>
           Month:{" "}
           <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))}>
@@ -100,33 +120,48 @@ function App() {
         <AddLog onAdded={loadData} />
       </div>
 
-      {/* Totals */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
-        <div style={{ flex: 1, padding: "0.5rem", background: "#e0f7fa", borderRadius: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
+        
+        {/* Total Monthly Hours */}
+        <div style={{ padding: "0.5rem", background: "#e0f7fa", borderRadius: "6px", maxWidth: "200px" }}>
           <h3 style={{ margin: 0 }}>Total Monthly Hours</h3>
-          <p style={{ fontSize: "1.2rem", margin: 0 }}>{totalHours}h</p>
+          <p style={{ fontSize: "1.2rem", margin: 0 }}>{formatHours(totalHours)}h</p>
         </div>
 
-        <div style={{ flex: 2, padding: "0.5rem", background: "#fce4ec", borderRadius: "6px" }}>
+        {/* Weekly Totals */}
+        <div style={{ padding: "0.5rem", background: "#fce4ec", borderRadius: "6px" }}>
           <h3 style={{ margin: 0 }}>Weekly Totals</h3>
-          <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.2rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "0.5rem" }}>
             {Object.entries(weeklyTotals).map(([weekRange, hours]) => (
-              <li key={weekRange}>{weekRange}: {hours}h</li>
+              <div
+                key={weekRange}
+                style={{
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  background: "#ffffff",
+                  border: "1px solid #ddd",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+                }}
+              >
+                <h4 style={{ margin: "0 0 0.5rem 0" }}>{weekRange}</h4>
+                <p style={{ margin: 0, fontSize: "1.1rem" }}>
+                  <strong>{formatHours(hours)}h</strong> worked
+                </p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
 
-      {/* Error */}
       {error && <p style={{ color: "red", textAlign: "center" }}>{error}</p>}
 
-      {/* List of logs */}
+      {/* Logs */}
       <div style={{ border: "1px solid #ccc", padding: "1rem", borderRadius: "8px", background: "#fafafa" }}>
         <h3 style={{ marginTop: 0 }}>Logs</h3>
         <ul style={{ paddingLeft: "1.2rem" }}>
           {logs.map((log) => (
             <li key={log.id} style={{ marginBottom: "0.5rem" }}>
-              {log.date} → {log.totalHours}h {log.notes && `(${log.notes})`}
+              {log.date} → {formatHours(log.totalHours)}h {log.notes && `(${log.notes})`}
             </li>
           ))}
         </ul>
